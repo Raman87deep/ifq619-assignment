@@ -1,0 +1,523 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "id": "5cc69aef",
+   "metadata": {},
+   "source": [
+    "# IFQ619 – Assignment 1\n",
+    "## Foundational Data Analytics Techniques\n",
+    "**Template Notebook (QDAVI structured)**\n",
+    "\n",
+    "> Fill in your personal details below, then follow each QDAVI section (Question → Data → Analysis → Visualisation → Insight) for both questions.\n",
+    "\n",
+    "_Generated: 2025-08-19 05:31 _"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "8386d46c",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from IPython.core.display import display, HTML\n",
+    "\n",
+    "# === Enter your details and run this cell ===\n",
+    "first_name = \"YourFirstName\"\n",
+    "last_name = \"YourLastName\"\n",
+    "student_number = \"YourStudentID\"\n",
+    "\n",
+    "personal_header = f\"<h1>{first_name} {last_name} ({student_number})</h1>\"\n",
+    "display(HTML(personal_header))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "c0f981e6",
+   "metadata": {},
+   "source": [
+    "### Environment setup\n",
+    "Imports common libraries used in this assignment. Feel free to add more if needed."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "66861ec1",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Core libraries\n",
+    "import os\n",
+    "import sys\n",
+    "import math\n",
+    "import json\n",
+    "from pathlib import Path\n",
+    "\n",
+    "# Data handling\n",
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "\n",
+    "# Text handling (for Q2)\n",
+    "import re\n",
+    "import string\n",
+    "from collections import Counter\n",
+    "\n",
+    "# Visualisation\n",
+    "import matplotlib.pyplot as plt\n",
+    "\n",
+    "# Display settings\n",
+    "pd.set_option(\"display.max_columns\", 80)\n",
+    "pd.set_option(\"display.width\", 120)\n",
+    "\n",
+    "# Make a data folder path helper\n",
+    "DATA_DIR = Path(\"data\")\n",
+    "DATA_DIR.mkdir(exist_ok=True)\n",
+    "\n",
+    "print(\"Python:\", sys.version)\n",
+    "print(\"Pandas:\", pd.__version__)\n",
+    "print(\"Numpy:\", np.__version__)\n",
+    "print(\"Matplotlib:\", plt.matplotlib.__version__)\n",
+    "print(\"Data directory:\", DATA_DIR.resolve())"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "953ff447",
+   "metadata": {},
+   "source": [
+    "## QUESTION 1\n",
+    "**Question:** In the tech sector, which factors are most common for team member attitudes about mental health?\n",
+    "\n",
+    "**Data:** OSMI Mental Health in Tech Survey 2016\n",
+    "\n",
+    "**Minimum required techniques:** Data cleaning, Aggregation\n",
+    "\n",
+    "---"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "770ed822",
+   "metadata": {},
+   "source": [
+    "### 1.1 Question (Q: clarify)\n",
+    "Interpretation: Identify, summarise, and rank the most **common factors** that influence team member attitudes about mental health in tech. \n",
+    "We will operationalise \"factors\" using relevant survey items such as:\n",
+    "- Perceived stigma in the workplace (e.g., willingness to discuss with supervisor/colleagues)\n",
+    "- Company policies/benefits (e.g., mental health coverage, resources awareness)\n",
+    "- Previous experiences (e.g., negative consequences of disclosure)\n",
+    "- Team culture signals (e.g., how discussing MH might affect promotion)\n",
+    "\n",
+    "We will produce aggregated frequencies and simple composite indicators to reveal which factors appear **most prevalent**."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "b4c3e277",
+   "metadata": {},
+   "source": [
+    "### 1.2 Data (D: acquire & prepare)\n",
+    "**Expected file:** `data/osmi_2016.csv` (download from OSMI Mental Health in Tech Survey 2016)\n",
+    "\n",
+    "This cell loads the CSV and performs light cleaning:\n",
+    "- Standardises Yes/No to 1/0\n",
+    "- Trims strings, normalises column names\n",
+    "- Selects a subset of columns related to workplace attitudes\n",
+    "- Handles missing values explicitly"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "0b7f255d",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# ---- Load OSMI 2016 data ----\n",
+    "# Place the CSV at: data/osmi_2016.csv\n",
+    "osmi_path = DATA_DIR / \"osmi_2016.csv\"\n",
+    "assert osmi_path.exists(), \"Missing data/osmi_2016.csv. Please place the OSMI 2016 CSV there.\"\n",
+    "\n",
+    "df1 = pd.read_csv(osmi_path)\n",
+    "\n",
+    "# Normalise column names\n",
+    "df1.columns = (\n",
+    "    df1.columns\n",
+    "      .str.strip()\n",
+    "      .str.replace(\"\\s+\", \"_\", regex=True)\n",
+    "      .str.replace(\"[^0-9a-zA-Z_]+\", \"\", regex=True)\n",
+    "      .str.lower()\n",
+    ")\n",
+    "\n",
+    "# Helper to coerce yes/no and 0/1 to numeric 0/1\n",
+    "def to01(x):\n",
+    "    if pd.isna(x):\n",
+    "        return np.nan\n",
+    "    s = str(x).strip().lower()\n",
+    "    if s in {\"1\",\"yes\",\"y\",\"true\",\"t\"}:\n",
+    "        return 1\n",
+    "    if s in {\"0\",\"no\",\"n\",\"false\",\"f\"}:\n",
+    "        return 0\n",
+    "    return np.nan\n",
+    "\n",
+    "# Candidate columns (names vary slightly by release; adjust if needed)\n",
+    "candidate_cols = [\n",
+    "    # workplace discussion willingness\n",
+    "    \"willing_to_discuss_with_coworkers\",\n",
+    "    \"willing_to_discuss_with_supervisor\",\n",
+    "    # perceived negative consequences\n",
+    "    \"negative_consequence_coworkers\",\n",
+    "    \"negative_consequence_supervisor\",\n",
+    "    # company benefits / resources\n",
+    "    \"benefits_mental_health_coverage\",\n",
+    "    \"aware_of_mental_health_resources\",\n",
+    "    \"formal_mh_leave\",\n",
+    "    # impact on career/progression\n",
+    "    \"discussing_mh_affects_career\",\n",
+    "    \"comfortable_discussing_mh_in_interview\",\n",
+    "]\n",
+    "\n",
+    "# Keep only columns that exist\n",
+    "q1_cols = [c for c in candidate_cols if c in df1.columns]\n",
+    "if not q1_cols:\n",
+    "    raise ValueError(\"None of the expected Q1 columns were found. Inspect df1.columns and adjust the candidate list.\")\n",
+    "\n",
+    "# Coerce Yes/No/0/1 to 0/1 where appropriate\n",
+    "for c in q1_cols:\n",
+    "    # Only attempt coercion if dtype is object or numeric-like\n",
+    "    if df1[c].dtype == object or \"int\" in str(df1[c].dtype) or \"float\" in str(df1[c].dtype):\n",
+    "        df1[c] = df1[c].apply(to01)\n",
+    "\n",
+    "# Report missingness\n",
+    "missing_summary = df1[q1_cols].isna().mean().sort_values(ascending=False)\n",
+    "print(\"Missingness (share of NaNs):\")\n",
+    "print(missing_summary.round(3))\n",
+    "\n",
+    "# We'll keep NaNs (explicitly) and use valid counts for proportions later\n",
+    "df1_subset = df1[q1_cols].copy()\n",
+    "df1_subset.head()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "f0a48d9b",
+   "metadata": {},
+   "source": [
+    "### 1.3 Analysis (A: compute)\n",
+    "We compute prevalence (share of 1s among non-missing) for each factor, then rank them. This gives us the **most common** factors reflected in responses."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "4363d909",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Prevalence of each factor = mean ignoring NaNs (since 1=yes present, 0=no)\n",
+    "prevalence = df1_subset.mean(numeric_only=True).sort_values(ascending=False)\n",
+    "\n",
+    "# Also capture valid sample sizes per item\n",
+    "valid_n = df1_subset.notna().sum()\n",
+    "\n",
+    "q1_summary = pd.DataFrame({\n",
+    "    \"prevalence_share\": prevalence,\n",
+    "    \"valid_n\": valid_n[prevalence.index]\n",
+    "}).sort_values(\"prevalence_share\", ascending=False)\n",
+    "\n",
+    "q1_summary.round(3)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "4ff010e7",
+   "metadata": {},
+   "source": [
+    "### 1.4 Visualisation (V: show)\n",
+    "Bar chart of factor prevalence (share of 1s)."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "3b47bac1",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Bar chart (Matplotlib, no custom colors or styles)\n",
+    "plt.figure(figsize=(10, 6))\n",
+    "prevalence.plot(kind=\"bar\")\n",
+    "plt.ylabel(\"Share of respondents (valid %)\")\n",
+    "plt.title(\"OSMI 2016 – Prevalence of Factors Related to MH Attitudes in Tech\")\n",
+    "plt.xticks(rotation=45, ha=\"right\")\n",
+    "plt.tight_layout()\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "f0a6101d",
+   "metadata": {},
+   "source": [
+    "### 1.5 Insight (I: conclude)\n",
+    "_Write 4–6 sentences summarising which factors are most common, any surprising patterns, and any caveats (e.g., missingness, sample bias)._"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "65b9b317",
+   "metadata": {},
+   "source": [
+    "---\n",
+    "## QUESTION 2\n",
+    "**Question:** What can the headlines from the Australian national broadcaster (the ABC) tell us about the concerns of the Australian public over time?\n",
+    "\n",
+    "**Data:** A Million News Headlines (ABC)\n",
+    "\n",
+    "We will examine headline text and publication dates to surface **salient concerns** over time via keyword families and frequency trends."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "ee924132",
+   "metadata": {},
+   "source": [
+    "### 2.1 Question (Q: clarify)\n",
+    "Operationalisation: Use **headline frequencies over time** to infer public concerns. We'll:\n",
+    "- Parse dates to year/month\n",
+    "- Clean headlines (lowercase, remove punctuation)\n",
+    "- Track keyword families (e.g., *economy*, *health*, *environment*, *politics*, *sport*, *disaster*)\n",
+    "- Aggregate counts by year to reveal trends"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "74cac367",
+   "metadata": {},
+   "source": [
+    "### 2.2 Data (D: acquire & prepare)\n",
+    "**Expected file:** `data/abcnews_2016_2020.csv` or `data/abcnews.csv` (the full \"A Million News Headlines\" dataset).\n",
+    "\n",
+    "This cell loads the CSV efficiently and prepares basic fields (date, year)."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "b6d2d42f",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# ---- Load ABC News headlines data ----\n",
+    "# Place the CSV at: data/abcnews.csv  (or adjust the path below)\n",
+    "abc_path = DATA_DIR / \"abcnews.csv\"\n",
+    "assert abc_path.exists(), \"Missing data/abcnews.csv. Please place the ABC headlines CSV there.\"\n",
+    "\n",
+    "# Try efficient reading (some versions have columns: 'publish_date','headline_text')\n",
+    "# If your file is large, you can add nrows= to sample during development.\n",
+    "usecols = None\n",
+    "try:\n",
+    "    # Read a small chunk to inspect columns\n",
+    "    peek = pd.read_csv(abc_path, nrows=5)\n",
+    "    cols = [c.strip().lower() for c in peek.columns]\n",
+    "    # Normalise\n",
+    "    colmap = {c: c.strip().lower() for c in peek.columns}\n",
+    "    df2 = pd.read_csv(abc_path, usecols=peek.columns).rename(columns=colmap)\n",
+    "except Exception as e:\n",
+    "    raise e\n",
+    "\n",
+    "# Standard expected columns\n",
+    "date_col_candidates = [\"publish_date\", \"date\", \"publish_datetime\"]\n",
+    "headline_col_candidates = [\"headline_text\", \"headline\", \"title\"]\n",
+    "\n",
+    "date_col = next((c for c in date_col_candidates if c in df2.columns), None)\n",
+    "headline_col = next((c for c in headline_col_candidates if c in df2.columns), None)\n",
+    "assert date_col is not None and headline_col is not None, f\"Expected date/headline columns not found. Got: {df2.columns.tolist()}\"\n",
+    "\n",
+    "# Parse date\n",
+    "df2[date_col] = pd.to_datetime(df2[date_col], errors=\"coerce\", utc=True)\n",
+    "df2 = df2.dropna(subset=[date_col, headline_col]).copy()\n",
+    "\n",
+    "# Derive year and month\n",
+    "df2[\"year\"] = df2[date_col].dt.year\n",
+    "df2[\"month\"] = df2[date_col].dt.month\n",
+    "\n",
+    "# Basic cleaning of headline\n",
+    "def clean_text(s: str) -> str:\n",
+    "    s = s.lower()\n",
+    "    s = re.sub(r\"http\\S+\", \"\", s)\n",
+    "    s = s.translate(str.maketrans(\"\", \"\", string.punctuation))\n",
+    "    s = re.sub(r\"\\s+\", \" \", s).strip()\n",
+    "    return s\n",
+    "\n",
+    "df2[\"headline_clean\"] = df2[headline_col].astype(str).map(clean_text)\n",
+    "df2[[\"year\", \"month\", \"headline_clean\"]].head()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "19794204",
+   "metadata": {},
+   "source": [
+    "### 2.3 Analysis (A: compute)\n",
+    "Define keyword families representing broad public concerns, then compute yearly frequencies. This is a simple, transparent approach suitable for foundational techniques."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "c801316f",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Define keyword families (extend as needed)\n",
+    "keyword_families = {\n",
+    "    \"economy\": [\"economy\",\"economic\",\"inflation\",\"jobs\",\"unemployment\",\"wages\",\"budget\",\"tax\",\"cost of living\"],\n",
+    "    \"health\": [\"health\",\"hospital\",\"covid\",\"pandemic\",\"virus\",\"vaccine\",\"mental health\",\"disease\",\"flu\"],\n",
+    "    \"environment\": [\"climate\",\"environment\",\"bushfire\",\"wildfire\",\"flood\",\"drought\",\"reef\",\"emissions\",\"carbon\"],\n",
+    "    \"politics\": [\"election\",\"parliament\",\"prime minister\",\"pm \",\"government\",\"policy\",\"senate\",\"vote\"],\n",
+    "    \"sport\": [\"sport\",\"football\",\"afl\",\"nrl\",\"cricket\",\"tennis\",\"soccer\",\"olympics\",\"world cup\"],\n",
+    "    \"disaster\": [\"earthquake\",\"cyclone\",\"storm\",\"tsunami\",\"disaster\",\"emergency\"],\n",
+    "}\n",
+    "\n",
+    "# Build regex patterns for each family\n",
+    "family_patterns = {fam: re.compile(\"|\".join([re.escape(k) for k in kws]), flags=re.IGNORECASE)\n",
+    "                   for fam, kws in keyword_families.items()}\n",
+    "\n",
+    "# Function to map a headline to families (multi-label possible)\n",
+    "def families_in_headline(text: str):\n",
+    "    hits = []\n",
+    "    for fam, pat in family_patterns.items():\n",
+    "        if pat.search(text):\n",
+    "            hits.append(fam)\n",
+    "    return hits\n",
+    "\n",
+    "# Expand to counts\n",
+    "records = []\n",
+    "for _, row in df2[[\"year\",\"headline_clean\"]].itertuples():\n",
+    "    # Using tuple unpacking; adjust if needed\n",
+    "    pass"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "f944946b",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "records = []\n",
+    "for _, r in df2.iterrows():\n",
+    "    y = int(r[\"year\"])\n",
+    "    txt = r[\"headline_clean\"]\n",
+    "    fams = families_in_headline(txt)\n",
+    "    for fam in fams:\n",
+    "        records.append((y, fam))\n",
+    "\n",
+    "fam_df = pd.DataFrame(records, columns=[\"year\",\"family\"])\n",
+    "yearly_counts = fam_df.groupby([\"year\",\"family\"]).size().reset_index(name=\"count\")\n",
+    "\n",
+    "# Normalise by total headlines per year (to get share)\n",
+    "year_totals = df2.groupby(\"year\").size().rename(\"total\").reset_index()\n",
+    "yearly = yearly_counts.merge(year_totals, on=\"year\", how=\"left\")\n",
+    "yearly[\"share\"] = yearly[\"count\"] / yearly[\"total\"]\n",
+    "\n",
+    "# Pivot for easy plotting\n",
+    "yearly_pivot = yearly.pivot(index=\"year\", columns=\"family\", values=\"share\").fillna(0)\n",
+    "yearly_pivot.round(4).head()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "12d679fa",
+   "metadata": {},
+   "source": [
+    "### 2.4 Visualisation (V: show)\n",
+    "Line plots of yearly **share of headlines** matching each concern family."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "bc837bf7",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Plot each family as its own line (single axes)\n",
+    "plt.figure(figsize=(10, 6))\n",
+    "for fam in sorted(yearly_pivot.columns):\n",
+    "    plt.plot(yearly_pivot.index, yearly_pivot[fam], label=fam)\n",
+    "plt.xlabel(\"Year\")\n",
+    "plt.ylabel(\"Share of headlines\")\n",
+    "plt.title(\"ABC headlines: inferred concerns over time (keyword-family shares)\")\n",
+    "plt.legend()\n",
+    "plt.tight_layout()\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "9dcc3178",
+   "metadata": {},
+   "source": [
+    "### 2.5 Insight (I: conclude)\n",
+    "_Write 5–7 sentences interpreting the trends. Identify notable peaks (e.g., bushfires, elections, pandemic) and relate them to Australian context. Acknowledge limitations of keyword-based inference and suggest possible extensions (e.g., topic modelling, named-entity trends)._"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "73116ae3",
+   "metadata": {},
+   "source": [
+    "---\n",
+    "### Appendix: Utility cells\n",
+    "- Show column names and quick info for a DataFrame\n",
+    "- Save intermediate results to CSV for inclusion in your report"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "19063416",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def quick_info(df: pd.DataFrame, name: str = \"df\"):\n",
+    "    print(f\"{name}: shape={df.shape}\")\n",
+    "    display(df.head())\n",
+    "    print(\"\\nColumns:\", list(df.columns))\n",
+    "\n",
+    "# Example usage:\n",
+    "# quick_info(df1, \"OSMI raw\")\n",
+    "# quick_info(df2, \"ABC raw\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "507e183e",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Save summaries (optional)\n",
+    "OUT_DIR = Path(\"outputs\")\n",
+    "OUT_DIR.mkdir(exist_ok=True)\n",
+    "q1_out = OUT_DIR / \"q1_factor_prevalence.csv\"\n",
+    "# Only save if q1_summary exists in the environment\n",
+    "if \"q1_summary\" in globals():\n",
+    "    q1_summary.to_csv(q1_out, index=True)\n",
+    "    print(\"Saved:\", q1_out.resolve())\n",
+    "\n",
+    "q2_out = OUT_DIR / \"q2_yearly_shares.csv\"\n",
+    "if \"yearly\" in globals():\n",
+    "    yearly.to_csv(q2_out, index=False)\n",
+    "    print(\"Saved:\", q2_out.resolve())"
+   ]
+  }
+ ],
+ "metadata": {},
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
